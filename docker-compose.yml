@@ -1,0 +1,16 @@
+version: '3'
+services:
+  redis28:
+    image: "redis:2.8.23"
+    ports:
+      - "6379:6379"
+    command: --port 6379
+    volumes:
+      - "./data/redis28:/data"
+  redis50:
+    image: "redis:5.0.5"
+    ports:
+      - "6380:6380"
+    command: --port 6380
+    volumes:
+      - "./data/redis50:/data"
