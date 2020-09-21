@@ -8,3 +8,4 @@ git_source(:github) { |repo_name| "https://github.com/#{repo_name}" }
 gem 'rake'
 gem 'redis'
 gem 'tomlrb'
+gem 'solargraph', group: :development
