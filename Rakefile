@@ -1,11 +1,16 @@
 require "redis"
 require "tomlrb"
+require "logger"
+require "colorize"
+require 'securerandom'
 
 CONFIG          = Tomlrb.load_file('config/redis.toml', symbolize_keys: true)
 TYPES           = [:src, :dst]
 TEST_DATA_COUNT = 1000
+UPDATE_COMMANDS = /set/
 
-@redis = Hash.new
+@redis  = Hash.new
+@logger = Logger.new(STDOUT, datetime_format: '%Y-%m-%d %H:%M:%S')
 
 TYPES.each do |type|
   @redis[type] = Redis.new(**CONFIG[type])
@@ -42,7 +47,21 @@ end
 desc "add test data"
 task :add_test_data do
   TEST_DATA_COUNT.times do |i|
-    @redis[:src].set i, "hello#{i}"
+    key   = SecureRandom.alphanumeric
+    value = SecureRandom.base64(1000)
+
+    @redis[:src].set(key, value)
+  end
+
+  if ENV["loop"]
+    loop do
+      key   = SecureRandom.alphanumeric
+      value = SecureRandom.base64(1000)
+
+      @redis[:src].set(key, value)
+      p key
+      sleep 1
+    end
   end
 end
 
@@ -91,4 +110,48 @@ namespace :check do
     end
     puts "result: #{result.all? ? 'OK' : 'NG'}"
   end
+end
+
+task :sync do
+  @redis[:src].monitor do |src|
+    next unless src = parse_monitor(src)
+
+    if src[:type] =~ UPDATE_COMMANDS
+      @redis[:dst].set(src[:key], src[:value])
+      puts "sync => #{src}"
+    end
+  end
+end
+
+task :sync_mon do
+  loop do
+    src = @redis[:src].keys
+    dst = @redis[:dst].keys
+    if src.sort == dst.sort
+      status = "OK!!".colorize(:green)
+    else
+      status = "NG!!".colorize(:red)
+    end
+    @logger.info "sync: #{status} => src: #{src.size} dst: #{dst.size}"
+    sleep 1
+  end
+end
+
+task :watch do
+  logger = Logger.new("log/monitor-#{Time.now.strftime("%Y-%m-%dT%H%M%S")}.log", datetime_format: '%Y-%m-%d %H:%M:%S')
+  @redis[:src].monitor do |src|
+    logger.info(src)
+  end
+end
+
+def parse_monitor(data)
+  data = data.split("\s")
+  return nil unless data.size == 6
+  data = {
+    id:     data[0],
+    src:    "#{data[1]} #{data[2]}",
+    type:   data[3].gsub(/^\"|\"$/, ""),
+    key:    data[4].gsub(/^\"|\"$/, ""),
+    value:  data[5].gsub(/^\"|\"$/, "")
+  }
 end
