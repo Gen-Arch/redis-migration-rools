@@ -10,10 +10,12 @@ TEST_DATA_COUNT = 1000
 UPDATE_COMMANDS = /set/
 
 @redis  = Hash.new
+@keys   = Hash.new
 @logger = Logger.new(STDOUT, datetime_format: '%Y-%m-%d %H:%M:%S')
 
 TYPES.each do |type|
   @redis[type] = Redis.new(**CONFIG[type])
+  @keys[type]  = @redis[type].keys
 end
 
 namespace :show do
@@ -32,9 +34,9 @@ namespace :show do
     TYPES.each do |type|
       namespace type do
         desc "show ttl all"
-        task :all => @redis[type].keys
+        task :all => @keys[type]
 
-        @redis[type].keys.each do |key|
+        @keys[type].each do |key|
           task key do
             puts "key: #{key} => ttl: #{@redis[type].ttl(key)}"
           end
@@ -68,13 +70,11 @@ end
 
 namespace :delete do
   TYPES.each do |type|
-    keys = @redis[type].keys
-
     namespace type do
-      desc "delete"
-      task :all => keys
+      desc "delete all data"
+      task :all => @keys[type]
 
-      keys.each do |key|
+      @keys[type].each do |key|
         task key do
           @redis[type].del(key)
         end
@@ -112,6 +112,7 @@ namespace :check do
   end
 end
 
+desc "Data synchronization"
 task :sync do
   @redis[:src].monitor do |src|
     next unless src = parse_monitor(src)
@@ -123,6 +124,7 @@ task :sync do
   end
 end
 
+desc "Data synchronization confirmation"
 task :sync_mon do
   loop do
     src = @redis[:src].keys
@@ -137,6 +139,7 @@ task :sync_mon do
   end
 end
 
+desc "Investigate the data"
 task :watch do
   logger = Logger.new("log/monitor-#{Time.now.strftime("%Y-%m-%dT%H%M%S")}.log", datetime_format: '%Y-%m-%d %H:%M:%S')
   @redis[:src].monitor do |src|
