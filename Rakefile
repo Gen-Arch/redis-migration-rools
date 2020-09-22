@@ -18,7 +18,22 @@ namespace :show do
 
     TYPES.each do |type|
       task type do
-        pp "#{type.to_s}:#{@redis[type].keys.size}"
+        puts "#{type.to_s}:#{@redis[type].keys.size}"
+      end
+    end
+  end
+
+  namespace :ttl do
+    TYPES.each do |type|
+      namespace type do
+        desc "show ttl all"
+        task :all => @redis[type].keys
+
+        @redis[type].keys.each do |key|
+          task key do
+            puts "key: #{key} => ttl: #{@redis[type].ttl(key)}"
+          end
+        end
       end
     end
   end
