@@ -25,7 +25,7 @@ TYPES.each do |type|
     task :all => TYPES
 
     task type do
-      @redismig.ttl(type)
+      @redismig.ttls(type)
     end
   end
 end

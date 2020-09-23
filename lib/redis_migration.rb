@@ -15,39 +15,28 @@ class RedisMigration
     @redis   = connection
   end
 
-  def connection
-    types = [:src, :dst]
-    redis = Hash.new
-
-    types.each do |type|
-      redis[type] = Redis.new(**@config[type])
-    end
-
-    redis
-  end
-
-
   def keys(type)
     @redis[type].keys
-  end
-
-  def ttl(type)
-    keys(type).each{|key| puts "key: #{key} => ttl: #{@redis[type].ttl(key)}"}
   end
 
   def put_keys(type)
     puts "#{type.to_s}:#{keys(type).size}"
   end
 
-  def get(type)
-    data = Hash.new
-    keys(type).each do |key|
-      data[key] = @redis[type].get(key)
-    end
-
-    data
+  def ttl(type, key)
+    @redis[type].ttl(key)
   end
 
+  def ttls(type)
+    keys(type).each{|key| puts "#{type.to_s} => key: #{key} ttl: #{ttl(type, key)}"}
+  end
+
+  def check
+    s = values(:src)
+    d = values(:dst)
+
+    return s.sort == d.sort
+  end
 
   def del(type)
     keys(type).each do |key|
@@ -68,13 +57,6 @@ class RedisMigration
       end
       puts "add => key: #{key}, ttl: #{ttl}"
     end
-  end
-
-  def check
-    s = get(:src)
-    d = get(:dst)
-
-    return s.sort == d.sort
   end
 
   def sync
@@ -140,6 +122,25 @@ class RedisMigration
   end
 
   private
+  def connection
+    types = [:src, :dst]
+    redis = Hash.new
+    types.each do |type|
+      redis[type] = Redis.new(**@config[type])
+    end
+
+    redis
+  end
+
+  def values(type)
+    data = Hash.new
+    keys(type).each do |key|
+      data[key] = @redis[type].get(key)
+    end
+
+    data
+  end
+
   def parse(data)
     data.force_encoding('UTF-8')
     data = data.encode("UTF-16BE", "UTF-8", :invalid => :replace, :undef => :replace, :replace => '?').encode("UTF-8")
