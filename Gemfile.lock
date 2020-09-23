@@ -21,7 +21,7 @@ GEM
     reverse_markdown (2.0.0)
       nokogiri
     rexml (3.2.4)
-    rubocop (0.91.0)
+    rubocop (0.91.1)
       parallel (~> 1.10)
       parser (>= 2.7.1.1)
       rainbow (>= 2.2.2, < 4.0)
@@ -64,4 +64,4 @@ DEPENDENCIES
   tomlrb
 
 BUNDLED WITH
-   2.1.4
+   1.17.2
