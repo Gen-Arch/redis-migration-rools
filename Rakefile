@@ -81,5 +81,5 @@ end
 
 desc "Investigate the data"
 task :watch do
-  @redisig.watch
+  @redismig.watch
 end
