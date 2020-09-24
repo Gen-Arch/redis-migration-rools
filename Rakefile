@@ -16,6 +16,17 @@ TYPES.each do |type|
     task :all => TYPES
 
     task type do
+      @redismig.keys(type).each do |key|
+        puts "#{type.to_s} => key: #{key}"
+      end
+    end
+  end
+
+  namespace :keys_count do
+    desc "show keys all"
+    task :all => TYPES
+
+    task type do
       @redismig.put_keys(type)
     end
   end

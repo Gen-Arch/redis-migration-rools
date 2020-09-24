@@ -7,3 +7,8 @@ db=0
 host="localhost"
 port=6380
 db=0
+
+[option]
+ignore_key = [
+  "ignore key name",
+]

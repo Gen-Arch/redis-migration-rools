@@ -9,14 +9,23 @@ class RedisMigration
   DELETE_COMMANDS       = /del/i
 
   def initialize(file)
-    file    ||= 'config/redis.toml'
-    @config  = Tomlrb.load_file(file, symbolize_keys: true)
-    @loggers = get_logger
-    @redis   = connection
+    file        ||= 'sample/redis.toml'
+    @config     = Tomlrb.load_file(file, symbolize_keys: true)
+    @option     = @config[:option]
+    @loggers    = get_logger
+    @redis      = connection
+    @ignore_key = @option && @option[:ignore_key] ? @option[:ignore_key] : Array.new
+  end
+
+  def ignore_key(*key)
+    @ignore_key.concat(key)
   end
 
   def keys(type)
-    @redis[type].keys
+    @redis[type].keys.map do |key|
+      next if @ignore_key.include?(key)
+      key
+    end.compact
   end
 
   def put_keys(type)
