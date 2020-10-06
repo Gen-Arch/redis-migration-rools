@@ -41,10 +41,24 @@ class RedisMigration
   end
 
   def check
-    s = values(:src)
-    d = values(:dst)
+    s = values(:src).sort
+    d = values(:dst).sort
 
-    return s.sort == d.sort
+
+    return s == d
+  end
+
+  def diff
+    s = values(:src).sort
+    d = values(:dst).sort
+
+    s_diff = s - d
+    d_diff = d - s
+
+    {
+      src: s_diff,
+      dst: d_diff
+    }
   end
 
   def del(type)
@@ -90,6 +104,7 @@ class RedisMigration
         puts "sync => key: #{data[:key]} ttl: #{ttl}msec"
       when DELETE_COMMANDS
         sync_dst.del(data[:key])
+        puts "delete => key: #{data[:key]}"
       else
         next
       end
@@ -97,8 +112,8 @@ class RedisMigration
   end
 
   def sync?
-    src = @redis[:src].keys
-    dst = @redis[:dst].keys
+    src    = keys(:src)
+    dst    = keys(:dst)
     result = src.sort == dst.sort
     status = result ? "OK!!".colorize(:green) : "NG!!".colorize(:red)
 

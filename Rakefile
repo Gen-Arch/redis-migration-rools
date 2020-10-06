@@ -73,7 +73,12 @@ end
 namespace :check do
   desc "check data"
   task :value do
-    puts "result: #{@redismig.check ? 'OK' : 'NG'}"
+    result = @redismig.check
+    puts "result: #{ result ? 'OK' : 'NG'}"
+    unless result
+      puts "diff-----------------"
+      pp @redismig.diff
+    end
   end
 end
 
