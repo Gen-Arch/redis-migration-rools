@@ -13,7 +13,8 @@ class RedisMigration
     @config     = Tomlrb.load_file(file, symbolize_keys: true)
     @option     = @config[:option]
     @loggers    = get_logger
-    @redis      = connection
+    @read_con   = connection
+    @write_con  = connection
     @ignore_key = @option && @option[:ignore_key] ? @option[:ignore_key] : Array.new
   end
 
@@ -22,7 +23,7 @@ class RedisMigration
   end
 
   def keys(type)
-    @redis[type].keys.map do |key|
+    @read_con[type].keys.map do |key|
       next if @ignore_key.include?(key)
       key
     end.compact
@@ -33,7 +34,7 @@ class RedisMigration
   end
 
   def ttl(type, key)
-    @redis[type].ttl(key)
+    @read_con[type].ttl(key)
   end
 
   def ttls(type)
@@ -70,40 +71,24 @@ class RedisMigration
 
   def migration
     keys(:src).each do |key|
-      v   = @redis[:src].get(key)
-      ttl = @redis[:src].ttl(key)
-
-      if ttl <= 0
-        @redis[:dst].set(key, v)
-      else
-        @redis[:dst].setex(key, ttl, v)
-      end
+      _, ttl = set({:src => :dst}, key)
       puts "add => key: #{key}, ttl: #{ttl}"
     end
   end
 
   def sync
-    sync_src = Redis.new(**@config[:src])
-    sync_dst = Redis.new(**@config[:dst])
-
-    @redis[:src].monitor do |data|
+    @read_con[:src].monitor do |data|
       data = parse(data)
 
       case data[:type]
       when UPDATE_COMMANDS
-        v   = sync_src.get(data[:key])
-        ttl = sync_src.ttl(data[:key])
-
-        sync_dst.setex(data[:key], ttl, v)
+        _, ttl = set({:src => :dst}, data[:key])
         puts "sync => key: #{data[:key]} ttl: #{ttl}"
       when UPDATE_MSEC_COMMANDS
-        v   = sync_src.get(data[:key])
-        ttl = sync_src.pttl(data[:key])
-
-        sync_dst.psetex(data[:key], ttl, v)
+        _, ttl = pset({:src => :dst}, data[:key])
         puts "sync => key: #{data[:key]} ttl: #{ttl}msec"
       when DELETE_COMMANDS
-        sync_dst.del(data[:key])
+        @write_con[:dst].del(data[:key])
         puts "delete => key: #{data[:key]}"
       else
         next
@@ -112,9 +97,9 @@ class RedisMigration
   end
 
   def sync?
-    src    = keys(:src)
-    dst    = keys(:dst)
-    result = src.sort == dst.sort
+    src    = keys(:src).sort
+    dst    = keys(:dst).sort
+    result = src == dst
     status = result ? "OK!!".colorize(:green) : "NG!!".colorize(:red)
 
     @loggers.each do |logger|
@@ -123,7 +108,7 @@ class RedisMigration
   end
 
   def watch
-    @redis[:src].monitor do |data|
+    @read_con[:src].monitor do |data|
       data = parse(data)
 
       data.delete(:value) unless ENV["varbose"] && data[:value]
@@ -159,10 +144,46 @@ class RedisMigration
   def values(type)
     data = Hash.new
     keys(type).each do |key|
-      data[key] = @redis[type].get(key)
+      data[key] = @read_con[type].get(key)
     end
 
     data
+  end
+
+  def set(direction, key)
+    src, dst = direction.first
+
+    v   = @write_con[src].get(key)
+    ttl = @write_con[src].ttl(key)
+
+    # not key
+    return [v, ttl] if ttl == -2
+
+    if ttl == -1
+      @write_con[dst].set(key, v)
+    else
+      @write_con[dst].setex(key, ttl, v)
+    end
+
+    [v, ttl]
+  end
+
+  def pset(direction, key)
+    src, dst = direction.first
+
+    v   = @write_con[src].get(key)
+    ttl = @write_con[src].pttl(key)
+
+    # not key
+    return [v, ttl] if ttl == -2
+
+    if ttl == -1
+      @write_con[dst].set(key, v)
+    else
+      @write_con[dst].psetex(key, ttl, v)
+    end
+
+    [v, ttl]
   end
 
   def parse(data)
